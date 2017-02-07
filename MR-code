@@ -1,0 +1,77 @@
+import java.io.IOException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+
+public class HotnCold {
+public static class MyMapper extends Mapper<LongWritable, Text, Text, Text>
+{
+	public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException
+	{
+		String line= value.toString();
+		String[] parts= line.trim().split("\\s+");
+			Double max= Double.parseDouble(parts[5]);
+			Double min= Double.parseDouble(parts[6]);
+			
+		if(max>40.00)
+		{
+			String day= "Hot Day";
+			context.write(new Text(parts[1]), new Text(day));
+		}
+		else if(min<10.00)
+		{
+			String day= "Cold Day";
+			context.write(new Text(parts[1]), new Text(day));
+		}
+			
+	}
+}
+public static class MyReducer extends Reducer<Text, Text, Text, Text>
+{
+	public void reduce(Text key, Text value, Context context) throws IOException, InterruptedException, ParseException
+	{
+		String trdate= key.toString();
+		Date indate= new SimpleDateFormat("yyyyMMdd", Locale.ENGLISH).parse(trdate);
+		String date= new SimpleDateFormat("dd-MM-yyyy", Locale.ENGLISH).format(indate);
+		context.write(new Text(date), value);
+	}
+}
+	
+	@SuppressWarnings("deprecation")
+	public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException 
+	{
+       Configuration conf= new Configuration();
+       Job job= new Job(conf, "Hot and Cold Day");
+       
+       job.setJarByClass(HotnCold.class);
+       job.setMapperClass(MyMapper.class);
+       job.setReducerClass(MyReducer.class);
+       
+       job.setMapOutputKeyClass(Text.class);
+       job.setMapOutputValueClass(Text.class);
+       job.setOutputKeyClass(Text.class);
+       job.setOutputValueClass(Text.class);
+       
+       job.setInputFormatClass(TextInputFormat.class);
+       job.setOutputFormatClass(TextOutputFormat.class);
+       
+       FileInputFormat.addInputPath(job,new Path(args[0]));
+       FileOutputFormat.setOutputPath(job,new Path(args[1]));
+       
+       System.exit(job.waitForCompletion(true)?0:1);
+	}
+
+}
